@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>测出来的笑声</title>
+<meta name="description" content="我们把《崩坏：星穹铁道》一部 PV 里的哼唱换成了电棍的笑声，而写代码的 AI 一个音也听不见。">
+<link rel="alternate" hreflang="en" href="index.html">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<article>
+
+<header class="hero">
+  <nav class="lang"><a href="index.html" hreflang="en" lang="en">English</a></nav>
+  <p class="kicker">音频分析 · 一次人力VOCALOID实验</p>
+  <h1>测出来的笑声</h1>
+  <p class="dek">我们把《崩坏：星穹铁道》「日冕」PV 里的哼唱换成了电棍的笑声。写代码的 AI 听不见声音，所以每一个决定都得有测量数据撑腰。这篇文章讲的就是这些测量：我们测了什么、怎么测的，以及哪些测量后来被证明是错的。</p>
+  <p class="meta">2026 年 10 月 · 约 15 分钟 · 所有图表都由项目的真实分析数据绘制</p>
+  <!-- 在这里放成品视频的链接，例如 <p class="watch"><a href="https://…">▶ 观看成品</a></p> -->
+  <figure class="listen">
+    <figcaption>成品，1:10–2:08：PV 的伴奏，哼唱换成了电棍。</figcaption>
+    <audio controls preload="none">
+      <source src="audio/result.webm" type='audio/webm; codecs="opus"'>
+      <source src="audio/result.m4a" type="audio/mp4">
+    </audio>
+  </figure>
+</header>
+
+<section>
+<p>在<a href="https://www.youtube.com/watch?v=BEKGuF5tY9E">白厄的角色 PV「日冕」</a>中，1:14 到 2:08 有一段男声哼唱，旋律悠长而缓慢，有些地方还叠成了一个小合唱。我们的目标是用 <b>电棍（otto）</b>的笑声替换这段哼唱：他的「哈哈哈」是 B 站鬼畜区的常驻素材。旋律里的每个音都变成一个「哈」，调好音高、拉到合适的长度；原曲叠了几个声部的地方，电棍也叠成合唱。</p>
+
+<p>这类作品被称为 <b>人力VOCALOID</b>：把一个真人的录音剪碎，让他「唱」一首歌。通常这是在 DAW 里一个音节一个音节手工完成的。我们想看看，其中有多少可以改用<em>测量</em>来完成。</p>
+
+<p>这里有个转折。代码是 AI 编程智能体（Claude Code）写的，而它听不见。它能读数字、看图、跑程序，但按不了播放键。所以整个项目遵循一条简单的规则：</p>
+
+<blockquote class="pull">听不见，就去测量；然后请人类来听。</blockquote>
+
+<div class="who">
+  <div><b>人类</b>听了每一个中间结果，在 FL Studio 里手工修正了旋律，并做出所有关乎品味的判断。</div>
+  <div><b>AI 智能体</b>写了代码（<span data-num="lines"></span> 行 Python），跑了分析，画了图表。它做的每个选择都必须用一个数字来证明。</div>
+</div>
+
+<p>下面是整个流程。每一步都是电脑在测量；「耳朵检查」则是进入下一步之前，由人类来听的环节。</p>
+
+<figure class="wide">
+  <ol class="pipeline">
+    <li><span class="step">1</span><b>对齐</b><span>把六份录音放到同一个时钟上，精确到零点几个采样点。</span><i>耳朵检查：分轨听起来对吗？</i></li>
+    <li><span class="step">2</span><b>找音符</b><span>追踪哼唱的音高，并把它变成音符。</span><i>耳朵检查：在 FL Studio 里修正音符</i></li>
+    <li><span class="step">3</span><b>数声部</b><span>测量哼唱从哪里开始变成合唱。</span><i>耳朵检查：数得对吗？</i></li>
+    <li><span class="step">4</span><b>切笑声</b><span>把每段笑声切成一个个「哈」。</span><i>耳朵检查：每个文件是不是正好一个「哈」？</i></li>
+    <li><span class="step">5</span><b>选角</b><span>决定哪个「哈」唱哪个音。</span></li>
+    <li><span class="step">6</span><b>渲染</b><span>用声码器给每个「哈」改音高、拉长度。</span><i>耳朵检查：A/B 对比，选哪个版本？</i></li>
+    <li><span class="step">7</span><b>混音</b><span>根据对原曲的测量来设定音量、混响和峰值。</span><i>耳朵检查：最终试听</i></li>
+  </ol>
+</figure>
+</section>
+
+<section>
+<h2>1 · 六份录音，一个时钟</h2>
+
+<p>我们手上有同一段配乐的好几个版本：</p>
+<ul>
+  <li>官方 YouTube 上传版；</li>
+  <li>B 站上一位 UP 主拆分配乐后上传的三个分 P；</li>
+  <li>同一位 UP 主后来分享的无损 WAV：原音乐、伴奏、人声，以及另外几个文件。</li>
+</ul>
+<p>成品最终要铺回 YouTube 视频上，所以它的时间轴就是主时钟，其他所有文件都必须精确地挪到这条时间轴上。</p>
+
+<p>标准工具是<b>互相关</b>。把一份录音在另一份上面滑动，在每个偏移位置把两者逐个采样相乘再求和。波形对齐时，波峰与波峰相乘，总和就会出现一个尖峰。这个尖峰所在的偏移，就是答案。</p>
+
+<p>如果老老实实地以每秒 48,000 个采样点、对三分半钟的音频这样算，乘法次数相当多，所以分两轮进行：</p>
+<ol>
+  <li><b>粗算。</b>把两个文件都降采样到 8 kHz，用 FFT 一次算出全部相关。这样得到的偏移误差在几个采样点以内。</li>
+  <li><b>精算。</b>回到 48 kHz，只在粗算结果附近 ±50 ms 的范围内搜索。再用峰顶的三个点拟合一条抛物线。抛物线的顶点会落在两个采样点<em>之间</em>，由此得到亚采样级的精度。</li>
+</ol>
+
+<figure class="wide" id="fig-align">
+  <figcaption><b>与 YouTube 音频的互相关。</b>选择一个音源。尖峰就是两份录音对齐的位置。</figcaption>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="音源" data-ctl="src"></div>
+    <div class="seg" role="group" aria-label="缩放" data-ctl="zoom">
+      <button data-v="coarse" aria-pressed="true">±2 s（粗算，8 kHz）</button>
+      <button data-v="fine">±50 ms（精算，48 kHz）</button>
+    </div>
+  </div>
+  <div class="chart" data-chart="xcorr" style="height:260px"></div>
+  <h4 class="sub">漂移检查：沿着文件每 10 秒一个窗口，重复同样的测量</h4>
+  <div class="chart" data-chart="drift" style="height:150px"></div>
+  <p class="howto"><b>怎么看。</b>上图：横轴是文件平移了多少，纵轴是吻合程度（1 = 完全相同）。下图：如果两个文件的播放速度哪怕只差一点点，这些点就会逐渐偏离零。它们始终保持在一个采样点的零头以内：对无损分轨来说是十分之一个采样点，约 2 微秒。</p>
+  <details><summary>查看数据</summary><table data-table="align"></table></details>
+</figure>
+
+<p>三条无损分轨都正好位于 <b>+800.000 ms</b>：这些 WAV 比视频晚 0.8 秒开始。纯人声文件（人声）的尖峰最弱，因为 YouTube 音频的主体是音乐，但它依然非常明确，因为没有任何其他偏移能接近它。「音乐加男声吟唱」文件则在别处，位于 −33.3 ms。这正好是 30 fps 视频的一帧，和 B 站分 P 的偏移相同：同样的音乐，不同的导出。</p>
+
+<h3>分轨加起来对得上吗？</h3>
+
+<p>把文件对齐是一回事，知道它们<em>里面</em>有什么是另一回事。网上很多「伴奏」是用 AI 音源分离做出来的。它们听起来没问题，但终究只是估计，难免有残留。有个简单的方法可以检验你拿到的是不是真货：<b>出自同一个混音工程的分轨，加起来就等于混音。</b>从混音里减去它们，看看还剩下什么。</p>
+
+<div class="tiles">
+  <div class="tile"><div class="v" data-num="mixres"></div><div class="l">原音乐 − (伴奏 + 人声)。剩下的只有 16 位量化的舍入误差：这是真正的分轨。</div></div>
+  <div class="tile"><div class="v">−15 dB</div><div class="l">「音乐加男声吟唱」− 伴奏，在没人唱的地方。这是另一份独立的混音，所以不能拿来做减法。</div></div>
+  <div class="tile"><div class="v" data-num="ytres"></div><div class="l">YouTube 音频 vs 原音乐。同样的音乐，只是经过了 YouTube 的有损编码。</div></div>
+</div>
+
+<p>第一个数字让后面的一切成为可能。因为伴奏 + 人声正好等于原音乐，伴奏就是 PV 精确地去掉人声之后的样子：没有涂抹，没有缺失。这就是笑声要铺在上面的「底子」。</p>
+
+<h3>我们没有走的捷径</h3>
+
+<p>在拿到这些无损文件之前，我们试过耍点小聪明。人声轨里既有哼唱<em>也有</em>旁白，而我们只想要哼唱。于是智能体写了一个「频谱拆分」：逐个频点比较两个版本的频谱图，保留看起来像哼唱的频点。</p>
+
+<p>人类一听，词没了。「哀丽秘榭的白厄，你的理想是什么」变成了「哀 的白厄，你的理想 」。旁白和哼唱在音高和时间上互相重叠，任何在频谱图上动刀的规则都会把两者一起切掉。结论毫不客气：<i>这件事永远不能靠编辑音频的频谱来做。</i>从此项目有了一条硬性规定：<b>禁止通过编辑频谱来做音源分离，只允许用真实分轨做减法。</b>后来发现，干净的哼唱轨其实根本用不着：直接在带旁白的人声上找音符，效果就很好。</p>
+</section>
+
+<section>
+<h2>2 · 找出音符</h2>
+
+<p>要让电棍唱出旋律，我们需要把旋律变成音符：起点、终点和音高。这需要两步：</p>
+<ul>
+  <li><b>音高追踪：</b>每秒多次估计基频 f0。</li>
+  <li><b>分段：</b>把这些估计值归并成音符。</li>
+</ul>
+
+<p>我们用了两个音高追踪器。它们出错的方式不同，所以正好互补：</p>
+<ul>
+  <li><b>pYIN</b>（librosa 中）寻找波形自我重复的周期，并给每一帧一个「是否有声」的概率。它很准，但很谨慎：遇到轻柔、带气声的哼唱，它常常回答「不确定」，这些帧就丢了。</li>
+  <li><b>Harvest</b>（来自 WORLD 声码器）更大胆：它几乎总能找出一个音高，有时甚至在根本没有音高的地方。</li>
+</ul>
+<p>我们采用的组合规则是：如果 pYIN 有把握，<em>或者</em>两个追踪器的结果相差不到 60 音分（0.6 个半音），这一帧就算作<b>在唱</b>。两种独立的方法互相印证，是很强的证据，即使它们各自都没有把握。</p>
+
+<figure class="wide" id="fig-pitch">
+  <figcaption><b>哼唱的音高，以及由它得到的音符。</b>拖动底部长条中的窗口来浏览整段（也可以用方向键）。按下播放即可收听原版人声或电棍版，窗口会跟着移动。</figcaption>
+  <div class="controls">
+    <div class="chips" data-ctl="layers">
+      <label><input type="checkbox" value="sung" checked><span class="key line" style="--c:var(--s2)"></span>演唱音高（综合）</label>
+      <label><input type="checkbox" value="pyin"><span class="key line" style="--c:var(--s3)"></span>仅 pYIN</label>
+      <label><input type="checkbox" value="harvest"><span class="key line" style="--c:var(--s5)"></span>仅 Harvest</label>
+      <label><input type="checkbox" value="draft"><span class="key box outline"></span>自动识别的音符</label>
+      <label><input type="checkbox" value="final" checked><span class="key box" style="--c:var(--s1)"></span>修正后的音符</label>
+    </div>
+    <div class="seg" role="group" aria-label="窗口宽度" data-ctl="win">
+      <button data-v="4">4 秒</button><button data-v="8" aria-pressed="true">8 秒</button><button data-v="16">16 秒</button>
+    </div>
+  </div>
+  <div class="chart" data-chart="pitch" style="height:300px"></div>
+  <div class="chart overview" data-chart="pitch-overview" style="height:54px"></div>
+  <p class="howto"><b>怎么看。</b>时间从左到右，音高从下到上（每行一个半音）。浅色竖线是拍（135 BPM），深色的是小节线。灰色区域表示旁白。打开「自动识别的音符」，可以对比电脑的初稿和人类手工修正后的版本。</p>
+</figure>
+
+<p>音高追踪的效果不错，问题出在把它变成音符这一步。智能体的初稿把哼唱切成了 <span data-num="draftcount"></span> 个音符；人类在 FL Studio 的钢琴卷帘里逐个修正，最后得到 72 个。逐个音符对比两者：</p>
+
+<div class="tiles" data-tiles="compare"></div>
+
+<p>难点在于哼唱是滑来滑去的。两个音之间的滑音，在音高追踪器看来像是一串很短的音；长音中间换一口气，看起来又像两个音。节拍追踪器还说速度是 <span data-num="tempo-tracked"></span> BPM，而实际是 <span data-num="tempo"></span>。误差不到 1%，但一分钟下来就会和网格错开整整一拍。</p>
+
+<p>解决办法是分工合作。人类凭耳朵在节拍网格上修正音符；电脑再检查这些修正：它从一个已知的锚点出发，把人类的 MIDI 文件放到视频时钟上，然后测量这些音符和追踪到的音高贴合得有多好。<span data-num="pitchfit"></span> 的演唱帧落在修正后音符的半个半音以内，剩下的大多是音符之间的滑音。哪一方都无法单独完成：人类不想把 72 个时间点敲到毫秒级，电脑也分不清哪些滑音是有意为之、哪些只是唱得不准。</p>
+</section>
+
+<section>
+<h2>3 · 有几个声部在哼？</h2>
+
+<p>大约从 1:27 开始，哼唱逐渐变厚成合唱，之后又变薄。我们希望电棍合唱也遵循同样的形状，所以需要逐个音符给出「有几个声部」的数字。</p>
+
+<p>我们试了四种度量，每种都以「相对独唱开头（1:14–1:22）偏离了多少个标准差」来表示：</p>
+<ul>
+  <li><b>立体声宽度：</b>左 − 右 的能量与 左 + 右 的能量之比。叠录的声部通常会分别摆到两侧，而单个人声位于正中。</li>
+  <li><b>谐噪比：</b>几个音准略有偏差的声部，会让单个声部原本清晰的谐波变得模糊。</li>
+  <li><b>拍频：</b>相差几个音分的两个声部，会让响度产生起伏。</li>
+  <li><b>非谐波能量：</b>不在这个音的谐波频率上的声音。</li>
+</ul>
+
+<figure class="wide" id="fig-stack">
+  <figcaption><b>哪种度量能找到合唱？</b>每条短线是一个音，越高越「像多个声部」。按下播放，听合唱从 1:27 开始逐渐叠起来（戴耳机效果更好）。</figcaption>
+  <div class="controls"><div class="seg" role="group" aria-label="度量" data-ctl="measure">
+    <button data-v="side_mid_db" aria-pressed="true">立体声宽度</button>
+    <button data-v="hnr_db">谐噪比</button>
+    <button data-v="beating">拍频</button>
+    <button data-v="off_harm">非谐波能量</button>
+  </div></div>
+  <div class="chart" data-chart="stack" style="height:250px"></div>
+  <h4 class="sub">每个乐句的电棍层数</h4>
+  <div class="chart" data-chart="layers" style="height:150px"></div>
+  <p class="howto"><b>怎么看。</b>左侧的阴影区域是独唱开头，也就是所有数值的比较基准。旁白期间的音显示为灰色，因为旁白也会改变这些数值。切换度量试试：只有立体声宽度会随着你听到的合唱起伏。</p>
+  <details><summary>查看数据</summary><table data-table="phrases"></table></details>
+</figure>
+
+<p>那些带着物理味道的度量，纸面上看起来很有希望，实际却一团糟：快速滑动的段落同样会模糊谐波、让响度起伏，效果和多出来的声部一样。立体声宽度是最不起眼的那个，却是唯一和人类听感一致的。我们最终使用的层数是它的平滑版本，并在人类凭耳朵指出的三个时刻做了微调。</p>
+</section>
+
+<section>
+<h2>4 · 把笑声切成一个个「哈」</h2>
+
+<p>原材料：电棍某次直播中 6 秒长的一段（三段笑声和一次吸气），以及一个粉丝自制素材站上的十连「哈」。每个「哈」都要成为一个独立文件，而且要切得干净：开头的「h」不能被削掉，结尾也不能带上下一个「哈」的碎片。</p>
+
+<p>最直接的办法是在安静的地方下刀，但这行不通：在一段笑声里，「哈」与「哈」首尾相连，响度几乎不下降。所以我们把「一个『哈』结束、下一个开始」的三种迹象合成了一个<b>切分分数</b>：</p>
+
+<pre><code>切分分数 = 响度下陷  +  1.5 × 音高回落  +  2 × 无声占比</code></pre>
+
+<ul>
+  <li><b>音高回落。</b>每个「哈」在音高上是一个小拱形，所以边界就在音高回落或跳变的地方。</li>
+  <li><b>无声占比。</b>两个「哈」之间带气声的「h」完全没有音高。</li>
+</ul>
+<p>我们还知道每段笑声有几个「哈」（人类数过），所以切分器取得分最高的 <em>n</em> 个位置，而不是所有超过阈值的位置。</p>
+
+<figure class="wide" id="fig-units">
+  <figcaption><b>笑声、证据与切点。</b>把鼠标悬停在一个「哈」上，查看对它的测量结果；点击它可以单独收听。</figcaption>
+  <div class="controls"><div class="seg" role="group" aria-label="笑声" data-ctl="usrc">
+    <button data-v="0" aria-pressed="true">直播笑声</button>
+    <button data-v="1">素材站笑声</button>
+  </div></div>
+  <div class="chart" data-chart="units" style="height:400px"></div>
+  <p class="howto"><b>怎么看。</b>三个面板共用一条时间轴：响度、音高（只在有音高的地方显示）和切分分数。竖线是切点，阴影块是切出来的片段，标有编号。「疲惫度」从一个音源第一个「哈」的 0，到最后一个的 1。</p>
+  <details><summary>查看数据</summary><table data-table="units"></table></details>
+</figure>
+
+<p>有两个细节让这件事得以成功：</p>
+<ul>
+  <li><b>一段左右不平衡的录音。</b>素材站笑声的结尾，左声道比右声道响 11 dB。如果直接把两个声道取平均，这些「哈」就会比其他的轻。所以在合并之前，每 50 ms 对两个声道做一次电平匹配。</li>
+  <li><b>有一段笑声难倒了算法。</b>直播的第三段笑声响度很平，所以它的两个切点是在音高变化处手工钉住的。23 个「哈」里，只有这一处是手工修正。</li>
+</ul>
+<p>人类还注意到，笑声越往后越显得精疲力竭，这是个值得保留的细节。所以每个「哈」都根据它在所属笑声中的位置得到一个「疲惫度」分数，这个分数会用在下一步。</p>
+</section>
+
+<section>
+<h2>5 · 选角：哪个「哈」唱哪个音？</h2>
+
+<p>我们有 72 个音，每个音最多四个声部；还有 23 个「哈」，每个都有自己的音高、长度和疲惫度。选择是一个小型优化问题：每一对（音，「哈」）都有一个代价，代价最低的胜出：</p>
+
+<ul class="costs">
+  <li><b>移调。</b>把一个「哈」移几个半音听起来很自然，移得太远就像修过音。代价在 3 个半音以内线性增长，超过之后按平方增长。</li>
+  <li><b>拉伸。</b>拉伸到 1.5 倍以内不计代价，超过之后代价越来越高（按对数计）。因此长音更倾向于选用长的「哈」。</li>
+  <li><b>疲惫度。</b>歌曲前段用精神的「哈」，后段用疲惫的：代价是「哈」的疲惫度与该音在歌曲中所处位置之间的差距。</li>
+  <li><b>重复 / 过度使用 / 撞车。</b>不要连续两次用同一个「哈」，要让所有「哈」都分到活，也绝不能在同一个音上叠两份同样的「哈」。两份一样的「哈」听起来不像两个声部，只像一个有相位问题的声部。</li>
+</ul>
+
+<figure class="wide" id="fig-cast">
+  <figcaption><b>为什么这个音选了这个「哈」？</b>在长条中点击一个音（或从列表中选择），查看领唱声部代价最低的六个候选，并按下播放收听这个音。</figcaption>
+  <div class="controls"><label class="select">音符 <select data-ctl="note"></select></label></div>
+  <div class="chart" data-chart="strip" style="height:130px"></div>
+  <div class="legend" data-legend="terms"></div>
+  <div class="chart" data-chart="costs" style="height:250px"></div>
+  <p class="howto"><b>怎么看。</b>长条中，每个音按音高绘制，颜色表示它的领唱用的是哪段笑声。下方每根横条是一个候选，长度是总代价，并按原因拆分。最短的横条胜出。</p>
+  <details><summary>查看数据</summary><table data-table="cands"></table></details>
+</figure>
+
+<p>这些权重是根据人类的偏好（「自然一点，不要太修音；不要拉伸得太狠；长音用长一点的笑声」）以及实际测量的结果来调整的。在最终的选角中，领唱声部相对每个「哈」本身音高的移调中位数是 <b>1.9 个半音</b>，最多不超过 4 个。早期有一个版本总是把低音分给直播笑声末尾那几个沙哑的「哈」，因为只有它们够低。允许领唱同时从两段笑声里选材之后，这个问题就解决了。现在主要是音域在决定选角：直播笑声在 E4 附近，素材站笑声在 A3 附近。</p>
+</section>
+
+<section>
+<h2>6 · 把声音拆开</h2>
+
+<p>现在要给每个「哈」改音高、拉长度，而且不能变成花栗鼠音。把录音加速播放会让音高升高，这就把我们想分别控制的三样东西绑在了一起。<b>WORLD 声码器</b>恰好把声音拆成这三部分：</p>
+<ul>
+  <li><b>音高</b>（f0）；</li>
+  <li><b>频谱包络</b>：让元音听起来是「a」、让声音听起来是电棍的那个形状；</li>
+  <li><b>非周期性</b>：每一时刻有多少气声或噪声成分。</li>
+</ul>
+<p>改变音高曲线，保留另外两部分，电棍就能用他自己的声音唱出另一个音。</p>
+
+<figure class="wide" id="fig-world">
+  <figcaption><b>被 WORLD 拆开的一个「哈」。</b>颜色是频谱包络（音色），橙线是音高。</figcaption>
+  <div class="controls"><div class="seg" role="group" aria-label="片段" data-ctl="wunit"></div></div>
+  <div class="chart heat" data-chart="world" style="height:270px"></div>
+  <div class="scale" data-scale="world"></div>
+  <h4 class="sub">气声程度（非周期性，0.5–5 kHz）</h4>
+  <div class="chart" data-chart="ap" style="height:120px"></div>
+  <p class="howto"><b>怎么看。</b>时间从左到右，频率从下到上（对数刻度）。颜色表示那一时刻各个频率的强度（见色标）。「元音开始」线之前是「h」：没有音高，气声程度高。之后那些明显的横向色带，就是构成「a」的共振峰。</p>
+</figure>
+
+<h3>只拉伸中间</h3>
+
+<p>一个「哈」长 0.2–0.5 秒，而有些音长达 2 秒。如果整体拉伸，清脆的「h」会变成缓慢的嘶嘶声。所以每个「哈」都有一张分三段的<b>时间映射</b>：</p>
+<ol>
+  <li>「h」和元音的前 20 ms 按原速播放；</li>
+  <li>只拉伸元音的中段；</li>
+  <li>最后 40 ms 再按原速播放，让「哈」自然收尾。</li>
+</ol>
+<p>元音正好落在拍点上，所以「h」会比拍点稍早一点出现。歌手也是这么唱的，UTAU 用户称之为「先行发声」。</p>
+
+<p>音高这里有一个可调的选项。笑声并不是平的：每个「哈」都有起伏的弧线。渲染器的计算公式是</p>
+<pre><code>f_out(t) = f_note × ( f_ha(t) / f_ha_centre ) ^ α</code></pre>
+<p>α = 1 时，笑声保留全部起伏，并以目标音为中心；α = 0 时，起伏被压平到目标音上，也就是硬修音。试试看：</p>
+
+<figure class="wide" id="fig-tmap">
+  <figcaption><b>自己渲染一个音。</b>这里在你的浏览器里，用真实的音高数据运行渲染器的时间映射和音高公式。「听听看」播放的是项目代码生成的真实渲染，取最接近当前设置的预渲染版本。</figcaption>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="片段" data-ctl="tunit"></div>
+    <label class="slider">音长 <input type="range" data-ctl="dur" min="0.15" max="2.5" step="0.01" value="2"><output></output></label>
+    <label class="slider">α <input type="range" data-ctl="alpha" min="0" max="1" step="0.05" value="0.5"><output></output></label>
+    <label class="check"><input type="checkbox" data-ctl="cap"> 拉伸上限 2.5×</label>
+  </div>
+  <p class="readout" data-readout="tmap"></p>
+  <div class="pair">
+    <div><h4 class="sub">时间映射：「哈」的哪一刻在何时播放</h4><div class="chart" data-chart="tmap" style="height:250px"></div></div>
+    <div><h4 class="sub">音高：与目标音相差的半音数</h4><div class="chart" data-chart="tpitch" style="height:250px"></div></div>
+  </div>
+  <p class="howto"><b>怎么看。</b>左图：每个点表示在音的每一刻，播放的是原始「哈」的哪一刻。线沿着对角线走的地方，「哈」按原速播放；线变平的地方，就是被拉伸了。右图：灰线是笑声本身的起伏（α = 1），橙线是实际渲染出的结果。α = 0 时，橙线平躺在目标音上。勾选上限后，长音最多拉伸到 2.5 倍，之后「哈」会提前结束。</p>
+</figure>
+
+<p>人类凭耳朵比较了四个渲染版本，给出了精确的评价：</p>
+<ul>
+  <li><b>α = 1</b>「和背景不太和谐」；</li>
+  <li><b>α = 0</b>「修得太狠」，失去了自然感；</li>
+  <li><b>α = 0.5</b>，长音完整拉伸，是最终的选择。</li>
+</ul>
+<p>人类的观点是：修音本身没问题，要避免的是 AI 声音模型那种过于平滑的声音。</p>
+
+<h3>只有测量才能发现的 bug</h3>
+
+<p>在第一次渲染中，有一个高音「HA」偏了 <b>6.6 个半音</b>。智能体听不出来，但它重新追踪了每个渲染出的音的音高，并与目标对比。原因是：这个「哈」的音高中心（公式里的 f_ha_centre）来自切分步骤，而那一步测量的是这个「哈」的另一部分，并不是在这个音上真正发声的那部分。修复方法是只用经过时间映射之后真正被听到的那些帧来测量中心。下面是修复后的同一项检查：</p>
+
+<figure class="wide" id="fig-check">
+  <figcaption><b>每个音都落在正确的音高上了吗？</b>重新测量渲染出的领唱声部，逐个音与目标对比。</figcaption>
+  <div class="controls"><div class="seg" role="group" aria-label="版本" data-ctl="var">
+    <button data-v="natural">α = 1（自然）</button>
+    <button data-v="half_full" aria-pressed="true">α = 0.5（最终选择）</button>
+    <button data-v="flat">α = 0（平直）</button>
+  </div></div>
+  <div class="chart" data-chart="check" style="height:220px"></div>
+  <p class="howto"><b>怎么看。</b>每个点是一个音：它的中位音高离目标有多远，以音分为单位（100 音分 = 1 个半音）。阴影带表示 ±30 音分，也就是我们设定的标记阈值。太短而无法测量的音没有显示。</p>
+  <details><summary>查看数据</summary><table data-table="check"></table></details>
+</figure>
+</section>
+
+<section>
+<h2>7 · 用尺子混音</h2>
+
+<p>混音师靠耳朵调整，而我们只能从原始录音中推导出每一个设定。</p>
+
+<p><b>音量。</b>电棍应该和他所替换的哼唱一样响。「一样响」以 LUFS 衡量，这是广播行业使用的响度单位：它对各个频率的加权方式大致和人耳一致。我们只在音符上测量，并排除了旁白，因为旁白比哼唱响，会让结果失真。</p>
+
+<p><b>要不要压缩？</b>混音师几乎会给每条人声都挂上压缩器，来平衡大声和小声的部分。我们先测量了一下：</p>
+
+<figure class="wide" id="fig-peaks">
+  <figcaption><b>每个声音有多平稳？</b>在每个电平（相对最响时刻）上，10 ms 片段所占的比例。</figcaption>
+  <div class="legend" data-legend="peaks"></div>
+  <div class="chart" data-chart="peaks" style="height:230px"></div>
+  <p class="howto"><b>怎么看。</b>曲线越靠左的声音，越多时间接近它自己的峰值，也就越平稳。圆点标出每条曲线的中位数。</p>
+</figure>
+
+<p>电棍合唱本身就已经比它所替换的哼唱<em>更</em>平稳：它的中位时刻比最响时刻低 <span data-num="otto-med"></span>，而哼唱是 <span data-num="hum-med"></span>。压缩器只会让它更扁平，所以我们没有用。</p>
+
+<p><b>混响。</b>原版人声处在某种空间里，电棍的干声笑声也应该处在同样的空间。为了测量混响有多少，我们观察一个乐句结束之后发生了什么：声音消失得有多快？原曲中大多数休止都被呼吸声或旁白填满了，但有三处是干净的：</p>
+
+<figure class="wide" id="fig-tails">
+  <figcaption><b>一个乐句的最后一个音之后发生了什么？</b>乐句结束后 0.6 秒内的电平，相对于最后一个音的结尾。</figcaption>
+  <div class="legend" data-legend="tails"></div>
+  <div class="chart" data-chart="tails" style="height:240px"></div>
+  <p class="howto"><b>怎么看。</b>时间轴上的零点是音结束的地方。细线是三个乐句结尾各自的曲线，粗线是它们的平均。缓慢而长的下降意味着大厅；迅速的下降意味着小空间，或者根本没有空间。大约 0.35 秒之后，原曲的线又回升了：那是下一口呼吸或下一个乐句进来了，不是混响。</p>
+</figure>
+
+<p>原曲的尾音在约 0.3 秒内下降 25–30 dB，说明空间很小。所以电棍得到的是一个轻而短的房间混响，大约以 −16 dB 混入。不是大厅。</p>
+
+<p><b>名不副实的限制器。</b>限制器是最后一道保险：它阻止峰值超过上限。我们用了一个流行音频库里的限制器，结果片段的测量响度跳高了 2.6 dB，尽管片段里没有任何地方接近上限。这里同时发生了两件事：原曲本身在 2:10 之后的峰值就超过了上限，这触发了限制器；而这个限制器封装的是 JUCE 的限制器，它还会对 −10 dBFS 以上的所有信号做 4:1 压缩，并加上补偿增益。它在悄悄地重新混整首歌。我们把它换成了几行前视限制的代码，只在片段内部、而且只在峰值会越过上限的地方起作用。在我们的混音里，一处都没有。</p>
+
+<div class="tiles" data-tiles="final"></div>
+
+<p>最终混音与原版 PV 在同样 58 秒内的响度相差不到半个 dB，峰值比满刻度低 2.6 dB。最后一项检查：电棍轨和伴奏相加，与最终混音的误差在 −126 dB 以内。所以任何人只要把人声单独铺到伴奏上，就能得到完全相同的结果。</p>
+</section>
+
+<section>
+<h2>我们学到了什么</h2>
+
+<ul class="learned">
+  <li><b>去测量你本来会去听的东西，并确认这个度量和耳朵一致。</b>四个看似合理的「有几个声部」度量，只有一个跟得上人的听感。</li>
+  <li><b>找真正的分轨，不要自己分离。</b>一次混音一致性检查（只是一个减法）告诉我们的，比任何精巧的频谱处理都多，而频谱处理还吃掉了旁白的字。</li>
+  <li><b>既要验证数据，也要验证工具。</b>一个「限制器」原来是个压缩器；一个在错误的帧上测得的音高中心，让一个音跑调了半个八度以上。两者都是靠重新测量输出、而不是盲信代码发现的。</li>
+  <li><b>把人放在需要判断的地方。</b>滑动旋律里的音符、α = 0.5 还是 α = 1、一个切点是否干净：人几秒钟就能定下来，而指标永远做不到完全。</li>
+  <li><b>把每一步都存成文件。</b>每个中间结果都是放在同一条时间轴上的普通 WAV 或 MIDI 文件，所以人类可以在 DAW 里打开任何一个、修正它，再交回来。</li>
+</ul>
+
+<p class="tools"><b>工具：</b>Python 3.11，以及 numpy 和 scipy（互相关、滤波）、librosa（pYIN 音高追踪）、pyworld（WORLD 声码器和 Harvest）、通过 parselmouth 调用的 Praat（谐噪比）、pedalboard（滤波和混响）、pyloudnorm（LUFS），还有 ffmpeg 和 yt-dlp。图表是纯 SVG 和 JavaScript，数据来自 <code>data.js</code>，由 <code>build.py blog</code> 根据项目的分析结果生成。</p>
+</section>
+
+<footer>
+  <p>「日冕」PV 及其音乐 © HoYoverse。笑声来自电棍（otto）的直播。无损分轨由 B 站 BV1QYgfzcEpF 的 UP 主分享。本页的音频片段是上述录音的简短节选，仅用于说明。</p>
+</footer>
+</article>
+
+<div class="tip" id="tip" hidden></div>
+<script src="data.js"></script>
+<script src="charts.js"></script>
+</body>
+</html>

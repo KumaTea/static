@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laughter, by Measurement</title>
+<meta name="description" content="How we replaced the humming in a Honkai: Star Rail PV with 电棍's laughter, when the AI writing the code couldn't listen to a single note.">
+<link rel="alternate" hreflang="zh-CN" href="index.zh.html">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<article>
+
+<header class="hero">
+  <nav class="lang"><a href="index.zh.html" hreflang="zh-CN" lang="zh-CN">中文</a></nav>
+  <p class="kicker">Audio analysis · a 人力VOCALOID experiment</p>
+  <h1>Laughter, by measurement</h1>
+  <p class="dek">We replaced the humming in Honkai: Star Rail's 「日冕」 PV with 电棍's laughter. The code was written by an AI agent that can't listen to audio, so every decision had to be backed by a measurement. This post is about those measurements: what we measured, how, and which ones turned out to be wrong.</p>
+  <p class="meta">October 2026 · about 15 minutes · every chart is drawn from the project's real analysis data</p>
+  <!-- Link to the finished video here, e.g. <p class="watch"><a href="https://…">▶ Watch the result</a></p> -->
+  <figure class="listen">
+    <figcaption>The result, 1:10–2:08: the PV's accompaniment, with Otto instead of the humming.</figcaption>
+    <audio controls preload="none">
+      <source src="audio/result.webm" type='audio/webm; codecs="opus"'>
+      <source src="audio/result.m4a" type="audio/mp4">
+    </audio>
+  </figure>
+</header>
+
+<section>
+<p>In <a href="https://www.youtube.com/watch?v=BEKGuF5tY9E">Phainon's character PV 「日冕」</a>, a male voice hums a long, slow melody from 1:14 to 2:08. In places it is stacked into a small choir. Our goal was to replace that humming with the laugh of <b>电棍 (Otto)</b>, a Chinese streamer whose "哈哈哈" is a staple of Bilibili's 鬼畜 remix scene. Each note of the melody becomes one "ha", tuned and stretched to fit. Where the original stacks voices, a choir of Ottos stacks too.</p>
+
+<p>Fans call this kind of work <b>人力VOCALOID</b>, "human-powered VOCALOID": you make a real person "sing" a song by cutting up recordings of them. It's normally done by hand in a DAW, one syllable at a time. We wanted to see how much of it could be <em>measured</em> instead.</p>
+
+<p>There was a twist. The code was written by an AI coding agent (Claude Code), and it can't hear. It can read numbers, look at plots and run programs, but it can't press play. So the project ran on a simple rule:</p>
+
+<blockquote class="pull">If you can't hear it, measure it. Then ask the human to listen.</blockquote>
+
+<div class="who">
+  <div><b>The human</b> listened to every intermediate result, corrected the melody by hand in FL Studio, and made every call of taste.</div>
+  <div><b>The AI agent</b> wrote the code (<span data-num="lines"></span> lines of Python), ran the analysis, and drew the charts. Every choice it made had to be justified with a number.</div>
+</div>
+
+<p>Here is the whole pipeline. Every step is something the computer measures; the "ear checks" are where a human listened before the next step began.</p>
+
+<figure class="wide">
+  <ol class="pipeline">
+    <li><span class="step">1</span><b>Align</b><span>Put six recordings on one clock, to a fraction of a sample.</span><i>Ear check: do the stems sound right?</i></li>
+    <li><span class="step">2</span><b>Find the notes</b><span>Track the humming's pitch and turn it into notes.</span><i>Ear check: fix the notes in FL Studio</i></li>
+    <li><span class="step">3</span><b>Count the voices</b><span>Measure where the humming becomes a choir.</span><i>Ear check: does the count match?</i></li>
+    <li><span class="step">4</span><b>Cut the laughs</b><span>Split each laugh into single "ha"s.</span><i>Ear check: one "ha" per file?</i></li>
+    <li><span class="step">5</span><b>Cast</b><span>Choose which "ha" sings which note.</span></li>
+    <li><span class="step">6</span><b>Render</b><span>Retune and stretch each "ha" with a vocoder.</span><i>Ear check: A/B, which version?</i></li>
+    <li><span class="step">7</span><b>Mix</b><span>Set the level, reverb and peaks from measurements of the original.</span><i>Ear check: final listen</i></li>
+  </ol>
+</figure>
+</section>
+
+<section>
+<h2>1 · Six recordings, one clock</h2>
+
+<p>We had several versions of the same soundtrack:</p>
+<ul>
+  <li>the official YouTube upload;</li>
+  <li>three parts of a Bilibili upload, from a creator who had split the soundtrack;</li>
+  <li>lossless WAV files that the same creator later shared: 原音乐 (the music), 伴奏 (the accompaniment), 人声 (the vocals), and a couple more.</li>
+</ul>
+<p>The YouTube video is what the result gets laid onto, so its timeline is the master clock. Everything else has to be moved onto it exactly.</p>
+
+<p>The standard tool for this is <b>cross-correlation</b>. Slide one recording past the other, and at every offset multiply the two together sample by sample and add it all up. Where the waveforms line up, the peaks multiply with peaks, and the sum spikes. The offset of that spike is the answer.</p>
+
+<p>Done naively at 48,000 samples per second over 3½ minutes, that's a lot of multiplying, so it runs in two passes:</p>
+<ol>
+  <li><b>Coarse.</b> Downsample both files to 8 kHz and correlate everything with an FFT. That gives the offset to within a few samples.</li>
+  <li><b>Fine.</b> Go back to 48 kHz and search only ±50 ms around the coarse answer. Then fit a parabola through the top three points of the peak. The parabola's vertex lands <em>between</em> samples, which gives sub-sample precision.</li>
+</ol>
+
+<figure class="wide" id="fig-align">
+  <figcaption><b>Cross-correlation against the YouTube audio.</b> Pick a source. The spike is where the two recordings line up.</figcaption>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Source" data-ctl="src"></div>
+    <div class="seg" role="group" aria-label="Zoom" data-ctl="zoom">
+      <button data-v="coarse" aria-pressed="true">±2 s (coarse, 8 kHz)</button>
+      <button data-v="fine">±50 ms (fine, 48 kHz)</button>
+    </div>
+  </div>
+  <div class="chart" data-chart="xcorr" style="height:260px"></div>
+  <h4 class="sub">Drift check: the same measurement repeated in 10-second windows along the file</h4>
+  <div class="chart" data-chart="drift" style="height:150px"></div>
+  <p class="howto"><b>How to read it.</b> Top: the horizontal axis is how far the file is shifted; the vertical axis is how well it matches (1 = identical). Bottom: if the two files ran at even slightly different speeds, the dots would walk away from zero. They stay within a fraction of a sample: for the lossless stems, a tenth of a sample, about 2 microseconds.</p>
+  <details><summary>Show the numbers</summary><table data-table="align"></table></details>
+</figure>
+
+<p>All three lossless stems sit at exactly <b>+800.000 ms</b>: the WAVs start 0.8 s after the video does. The vocals-only file (人声) has the weakest peak, because the YouTube audio is mostly music. It is still unmistakable, because no other offset comes close. The "music + humming" file sits somewhere else, at −33.3 ms. That's exactly one frame of 30 fps video, the same offset as the Bilibili parts: same music, different export.</p>
+
+<h3>Do the stems add up?</h3>
+
+<p>Lining files up is one thing. Knowing what is <em>in</em> them is another. Many "accompaniment" tracks online are made with AI source separation. They sound fine, but they are only estimates, and they leak. There's a cheap test for whether you have the real thing: <b>stems that came out of the same mixing session add back up to the mix</b>. Subtract them from the mix and see what's left.</p>
+
+<div class="tiles">
+  <div class="tile"><div class="v" data-num="mixres"></div><div class="l">原音乐 − (伴奏 + 人声). What's left is at the level of 16-bit rounding: these are the real stems.</div></div>
+  <div class="tile"><div class="v">−15 dB</div><div class="l">"music + humming" − 伴奏, where nobody is singing. A separate mix, so it can't be used for subtraction.</div></div>
+  <div class="tile"><div class="v" data-num="ytres"></div><div class="l">YouTube audio vs 原音乐. The same music, but through YouTube's lossy encoder.</div></div>
+</div>
+
+<p>The first number made everything after it possible. Because 伴奏 + 人声 adds up to the music, the 伴奏 is the PV with exactly its vocals removed: nothing smeared, nothing missing. That's the "bed" the laughs sit on.</p>
+
+<h3>The shortcut we didn't take</h3>
+
+<p>Before those lossless files turned up, we tried to be clever. The vocals track holds the humming <em>and</em> the narrator's voice, and we wanted just the humming. So the agent wrote a "spectral split": it compared spectrograms of two versions bin by bin and kept the bins that looked like humming.</p>
+
+<p>The human listened, and words were missing. "哀丽秘榭的白厄，你的理想是什么" came out as "哀 的白厄，你的理想 ". The narration and the humming overlap in pitch and time, and any rule that cuts in the spectrogram cuts both. The verdict was blunt: <i>this can never be done by editing the audio's spectrum.</i> From then on the project had a hard rule: <b>no source separation by spectral editing. Only subtractions of real stems.</b> As it turned out, a clean humming track wasn't needed at all. Finding the notes works fine on the vocals as they are, narration included.</p>
+</section>
+
+<section>
+<h2>2 · Finding the notes</h2>
+
+<p>To make Otto sing the melody, we need the melody as notes: start, end and pitch. Getting there takes two steps:</p>
+<ul>
+  <li><b>Pitch tracking:</b> estimate the fundamental frequency, f0, many times a second.</li>
+  <li><b>Segmentation:</b> group those estimates into notes.</li>
+</ul>
+
+<p>We ran two pitch trackers. They fail in different ways, so they make a good pair:</p>
+<ul>
+  <li><b>pYIN</b> (in librosa) looks for the lag at which the waveform repeats itself, and gives each frame a probability that it is voiced at all. It is accurate, but cautious: on soft, breathy humming it often answers "not sure", and those frames drop out.</li>
+  <li><b>Harvest</b> (from the WORLD vocoder) is bolder: it almost always finds a pitch, sometimes where there is none.</li>
+</ul>
+<p>The combination we used: a frame counts as <b>sung</b> if pYIN is confident, <em>or</em> if both trackers agree to within 60 cents (0.6 of a semitone). Two independent methods agreeing is strong evidence, even when neither is sure on its own.</p>
+
+<figure class="wide" id="fig-pitch">
+  <figcaption><b>The humming's pitch, and the notes made from it.</b> Drag the window in the bottom strip to move through the whole passage (arrow keys work too). Press play to hear it, either the original vocals or Otto, and the window follows along.</figcaption>
+  <div class="controls">
+    <div class="chips" data-ctl="layers">
+      <label><input type="checkbox" value="sung" checked><span class="key line" style="--c:var(--s2)"></span>Sung pitch (combined)</label>
+      <label><input type="checkbox" value="pyin"><span class="key line" style="--c:var(--s3)"></span>pYIN only</label>
+      <label><input type="checkbox" value="harvest"><span class="key line" style="--c:var(--s5)"></span>Harvest only</label>
+      <label><input type="checkbox" value="draft"><span class="key box outline"></span>Automatic notes</label>
+      <label><input type="checkbox" value="final" checked><span class="key box" style="--c:var(--s1)"></span>Corrected notes</label>
+    </div>
+    <div class="seg" role="group" aria-label="Window" data-ctl="win">
+      <button data-v="4">4 s</button><button data-v="8" aria-pressed="true">8 s</button><button data-v="16">16 s</button>
+    </div>
+  </div>
+  <div class="chart" data-chart="pitch" style="height:300px"></div>
+  <div class="chart overview" data-chart="pitch-overview" style="height:54px"></div>
+  <p class="howto"><b>How to read it.</b> Time runs left to right, pitch runs bottom to top (one row per semitone). The faint vertical lines are the beat (135 BPM); the darker ones are bar lines. Gray bands mark narration. Turn on "Automatic notes" to compare the computer's draft with the version a human corrected by hand.</p>
+</figure>
+
+<p>The pitch tracking was good. Turning it into notes was where the computer fell short. The agent's draft cut the humming into <span data-num="draftcount"></span> notes; the human, correcting it note by note in FL Studio's piano roll, ended with 72. Comparing the two note for note:</p>
+
+<div class="tiles" data-tiles="compare"></div>
+
+<p>The trouble is that humming glides. A slide between two notes looks, to a pitch tracker, like a run of very short notes. A breath in the middle of a held note looks like two notes. And the beat tracker said the tempo was <span data-num="tempo-tracked"></span> BPM when it is really <span data-num="tempo"></span>. That's off by less than 1 %, but over a minute it drifts a whole beat away from the grid.</p>
+
+<p>The fix was teamwork. The human corrected the notes by ear, on the beat grid. The computer then checked the corrections: it placed the human's MIDI file on the video's clock from a known anchor and measured how well the notes sit on the tracked pitch. <span data-num="pitchfit"></span> of sung frames fall within half a semitone of the corrected notes, and the rest are mostly glides between them. Neither side could have done it alone. The human didn't want to tap out 72 timings to the millisecond; the computer couldn't tell a deliberate slide from a sloppy one.</p>
+</section>
+
+<section>
+<h2>3 · How many voices are humming?</h2>
+
+<p>From about 1:27, the humming thickens into a choir and then thins out again. We wanted the Otto choir to follow the same shape, so we needed a number for "how many voices", note by note.</p>
+
+<p>We tried four measures. Each is reported as how far it moves from the solo opening (1:14–1:22), in standard deviations:</p>
+<ul>
+  <li><b>Stereo width:</b> the energy in left − right compared with left + right. Overdubbed voices are usually panned apart, while one voice sits in the centre.</li>
+  <li><b>Harmonics-to-noise ratio:</b> several slightly out-of-tune voices blur the clean harmonics of one.</li>
+  <li><b>Beating:</b> two voices a few cents apart make the loudness wobble.</li>
+  <li><b>Off-harmonic energy:</b> sound at frequencies that aren't the note's harmonics.</li>
+</ul>
+
+<figure class="wide" id="fig-stack">
+  <figcaption><b>Which measure finds the choir?</b> Each short line is one note. Higher means "more like several voices". Press play and listen for the choir building up from 1:27 (headphones help).</figcaption>
+  <div class="controls"><div class="seg" role="group" aria-label="Measure" data-ctl="measure">
+    <button data-v="side_mid_db" aria-pressed="true">Stereo width</button>
+    <button data-v="hnr_db">Harmonics-to-noise</button>
+    <button data-v="beating">Beating</button>
+    <button data-v="off_harm">Off-harmonic energy</button>
+  </div></div>
+  <div class="chart" data-chart="stack" style="height:250px"></div>
+  <h4 class="sub">Otto layers per phrase</h4>
+  <div class="chart" data-chart="layers" style="height:150px"></div>
+  <p class="howto"><b>How to read it.</b> The shaded strip on the left is the solo opening, the yardstick everything is compared with. Notes during narration are gray, because the narrator also changes these numbers. Switch measures: only stereo width rises and falls with the choir you can hear.</p>
+  <details><summary>Show the numbers</summary><table data-table="phrases"></table></details>
+</figure>
+
+<p>The physics-flavoured measures looked promising on paper and were a mess in practice. Fast, gliding passages blur harmonics and make loudness wobble just as well as extra voices do. Stereo width was the boring one, and the only one that matched what the human heard. The layer counts we used are a smoothed version of it, nudged at three moments the human pointed out by ear.</p>
+</section>
+
+<section>
+<h2>4 · Cutting a laugh into "ha"s</h2>
+
+<p>The raw material: a 6-second stretch of one of Otto's streams (three laughs and an inhale), plus a 10-"ha" laugh from a fan-made sample site. Each "ha" needs to become its own file, cut cleanly: no clipped "h" at the start, no scrap of the next "ha" at the end.</p>
+
+<p>The obvious approach is to cut where it gets quiet. It fails, because inside a laugh the "ha"s run straight into each other and the loudness barely dips. So we combined three signs that one "ha" has ended and the next begun into a <b>cut score</b>:</p>
+
+<pre><code>cut score = loudness dip  +  1.5 × pitch reset  +  2 × unvoiced share</code></pre>
+
+<ul>
+  <li><b>Pitch reset.</b> Each "ha" is a small arch in pitch, so a boundary is where the pitch drops back or jumps.</li>
+  <li><b>Unvoiced share.</b> The breathy "h" between two "ha"s has no pitch at all.</li>
+</ul>
+<p>We also knew how many "ha"s each laugh has (the human counted), so the cutter takes the <em>n</em> best-scoring places rather than everything above a threshold.</p>
+
+<figure class="wide" id="fig-units">
+  <figcaption><b>The laugh, the evidence, and the cuts.</b> Hover over a "ha" to see what was measured about it, and click it to hear it on its own.</figcaption>
+  <div class="controls"><div class="seg" role="group" aria-label="Laugh" data-ctl="usrc">
+    <button data-v="0" aria-pressed="true">Stream laugh</button>
+    <button data-v="1">Sample-site laugh</button>
+  </div></div>
+  <div class="chart" data-chart="units" style="height:400px"></div>
+  <p class="howto"><b>How to read it.</b> Three panels share one time axis: loudness, pitch (only where the voice is pitched) and the cut score. The vertical lines are the cuts. The shaded blocks are the resulting units, labelled with their number. "Tired" runs from 0 for the first "ha" of a source to 1 for its last.</p>
+  <details><summary>Show the numbers</summary><table data-table="units"></table></details>
+</figure>
+
+<p>Two details made this work:</p>
+<ul>
+  <li><b>A lopsided recording.</b> The end of the sample-site laugh is 11 dB louder on the left than on the right. Averaging the two channels would have made those "ha"s quieter than the rest. So each channel is level-matched every 50 ms before they are combined.</li>
+  <li><b>One laugh beat the algorithm.</b> The third stream laugh is flat in loudness, so its two cuts were pinned by hand at the pitch changes. Out of 23 "ha"s, that was the only manual fix.</li>
+</ul>
+<p>The human also noticed that the laughs get more and more exhausted as they go on, which is a nice touch to keep. So every "ha" gets a "tired" score from its position in its laugh, and that score feeds the next step.</p>
+</section>
+
+<section>
+<h2>5 · Casting: which "ha" sings which note?</h2>
+
+<p>We have 72 notes, up to four voices on each, and 23 "ha"s, each with its own pitch, length and level of tiredness. Choosing is a small optimisation. Every (note, "ha") pair gets a cost, and the cheapest one wins:</p>
+
+<ul class="costs">
+  <li><b>Pitch shift.</b> Moving a "ha" a few semitones sounds natural; moving it far sounds tuned. The cost grows linearly up to 3 semitones and quadratically after that.</li>
+  <li><b>Stretch.</b> Stretching up to 1.5× is free; beyond that it costs more and more (on a log scale). Long notes therefore prefer long "ha"s.</li>
+  <li><b>Tiredness.</b> Fresh "ha"s early in the song, exhausted ones late: the gap between the "ha"'s tiredness and the note's position in the song.</li>
+  <li><b>Repeat / overuse / clash.</b> Don't give the same "ha" twice in a row, spread the work across all of them, and never stack two copies of the same "ha" on one note. Two copies don't sound like two voices, just one phasey one.</li>
+</ul>
+
+<figure class="wide" id="fig-cast">
+  <figcaption><b>Why did this note get this "ha"?</b> Click a note in the strip (or pick one from the list) to see its six cheapest candidates for the lead voice, and press play to hear the note.</figcaption>
+  <div class="controls"><label class="select">Note <select data-ctl="note"></select></label></div>
+  <div class="chart" data-chart="strip" style="height:130px"></div>
+  <div class="legend" data-legend="terms"></div>
+  <div class="chart" data-chart="costs" style="height:250px"></div>
+  <p class="howto"><b>How to read it.</b> In the strip, each note is drawn at its pitch and coloured by which laugh sings its lead. Below, each bar is one candidate; its length is the total cost, split into the reasons. The shortest bar wins.</p>
+  <details><summary>Show the numbers</summary><table data-table="cands"></table></details>
+</figure>
+
+<p>The weights were tuned against the human's taste ("natural rather than tuned, don't stretch too hard, longer laughs for longer notes") and against measured outcomes. In the final cast, the lead voice moves a median of <b>1.9 semitones</b> from each "ha"'s natural pitch, and never more than 4. One early version kept handing the low notes to the croaky "ha"s at the very end of the stream laugh, the only low ones it had. Letting the lead draw from both laughs fixed that. The register now does most of the casting: the stream laugh sits around E4, and the sample-site laugh around A3.</p>
+</section>
+
+<section>
+<h2>6 · Taking a voice apart</h2>
+
+<p>Now each "ha" has to be retuned and stretched without turning into a chipmunk. Speeding a recording up raises its pitch, and that ties together three things we want to control separately. The <b>WORLD vocoder</b> splits a voice into exactly those three parts:</p>
+<ul>
+  <li>the <b>pitch</b> (f0);</li>
+  <li>the <b>spectral envelope</b>: the shape that makes the vowel sound like an "a", and the voice like Otto;</li>
+  <li>the <b>aperiodicity</b>: how breathy or noisy each moment is.</li>
+</ul>
+<p>Change the pitch curve, keep the other two, and Otto sings a different note in his own voice.</p>
+
+<figure class="wide" id="fig-world">
+  <figcaption><b>One "ha", taken apart by WORLD.</b> The colour is the spectral envelope (the timbre), and the orange line is the pitch.</figcaption>
+  <div class="controls"><div class="seg" role="group" aria-label="Unit" data-ctl="wunit"></div></div>
+  <div class="chart heat" data-chart="world" style="height:270px"></div>
+  <div class="scale" data-scale="world"></div>
+  <h4 class="sub">Breathiness (aperiodicity, 0.5–5 kHz)</h4>
+  <div class="chart" data-chart="ap" style="height:120px"></div>
+  <p class="howto"><b>How to read it.</b> Time runs left to right, and frequency runs up on a log scale. The colour shows how strong each frequency is at that moment (see the scale). Before the "vowel starts" line is the "h": no pitch, high breathiness. After it, the strong horizontal bands are the formants that make an "a".</p>
+</figure>
+
+<h3>Stretching only the middle</h3>
+
+<p>A "ha" lasts 0.2–0.5 s, and some notes are 2 s long. Stretching the whole thing would turn the crisp "h" into a slow hiss. So each "ha" gets a <b>time map</b> with three parts:</p>
+<ol>
+  <li>the "h" and the first 20 ms of the vowel play at normal speed;</li>
+  <li>only the middle of the vowel is stretched;</li>
+  <li>the last 40 ms play at normal speed again, so the "ha" ends naturally.</li>
+</ol>
+<p>The vowel starts exactly on the beat, so the "h" comes slightly before it. Singers do the same, and UTAU users call it the pre-utterance.</p>
+
+<p>Pitch has a choice built in. A laugh isn't flat: each "ha" arches up and down. The renderer computes</p>
+<pre><code>f_out(t) = f_note × ( f_ha(t) / f_ha_centre ) ^ α</code></pre>
+<p>With α = 1 the laugh keeps its full movement, centred on the note. With α = 0 it is flattened onto the note, hard-tuned. Try it:</p>
+
+<figure class="wide" id="fig-tmap">
+  <figcaption><b>Render one note yourself.</b> This runs the renderer's time map and pitch formula in your browser, on the real pitch data. "Hear it" plays a real render made by the project's code, using the nearest pre-rendered settings.</figcaption>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Unit" data-ctl="tunit"></div>
+    <label class="slider">Note length <input type="range" data-ctl="dur" min="0.15" max="2.5" step="0.01" value="2"><output></output></label>
+    <label class="slider">α <input type="range" data-ctl="alpha" min="0" max="1" step="0.05" value="0.5"><output></output></label>
+    <label class="check"><input type="checkbox" data-ctl="cap"> cap the stretch at 2.5×</label>
+  </div>
+  <p class="readout" data-readout="tmap"></p>
+  <div class="pair">
+    <div><h4 class="sub">Time map: which moment of the "ha" plays when</h4><div class="chart" data-chart="tmap" style="height:250px"></div></div>
+    <div><h4 class="sub">Pitch: semitones from the note</h4><div class="chart" data-chart="tpitch" style="height:250px"></div></div>
+  </div>
+  <p class="howto"><b>How to read it.</b> Left: each point says which moment of the original "ha" plays at each moment of the note. Wherever the line follows the diagonal, the "ha" plays at normal speed; where it flattens out, it is stretched. Right: the gray line is the laugh's own movement (α = 1), and the orange line is what gets rendered. At α = 0 the orange line lies flat on the note. With the cap on, long notes stop stretching at 2.5× and the "ha" ends early instead.</p>
+</figure>
+
+<p>The human compared four renders by ear and gave a precise verdict:</p>
+<ul>
+  <li><b>α = 1</b> was "not so harmonious with the background";</li>
+  <li><b>α = 0</b> was "too tuned", and lost its natural sense;</li>
+  <li><b>α = 0.5</b>, with long notes stretched all the way, was the keeper.</li>
+</ul>
+<p>The human's point: tuning is fine; what to avoid is the over-smooth sound of AI voice models.</p>
+
+<h3>A bug only a measurement could catch</h3>
+
+<p>In the first render, one high "HA" came out <b>6.6 semitones off</b>. The agent couldn't hear that, but it re-tracked the pitch of every rendered note and compared it with its target. The cause: the "ha"'s pitch centre (f_ha_centre in the formula) came from the cutting step, which had measured a different part of that "ha" than the part that actually sounds on the note. The fix was to measure the centre on exactly the frames that are heard after the time map. Below is the same check after the fix:</p>
+
+<figure class="wide" id="fig-check">
+  <figcaption><b>Did each note land on its pitch?</b> The rendered lead voice is re-measured, note by note, and compared with its target.</figcaption>
+  <div class="controls"><div class="seg" role="group" aria-label="Version" data-ctl="var">
+    <button data-v="natural">α = 1 (natural)</button>
+    <button data-v="half_full" aria-pressed="true">α = 0.5 (chosen)</button>
+    <button data-v="flat">α = 0 (flat)</button>
+  </div></div>
+  <div class="chart" data-chart="check" style="height:220px"></div>
+  <p class="howto"><b>How to read it.</b> Each dot is one note: how far its median pitch sits from the target, in cents (100 cents = 1 semitone). The band marks ±30 cents, the threshold we flagged at. Short notes too brief to measure are left out.</p>
+  <details><summary>Show the numbers</summary><table data-table="check"></table></details>
+</figure>
+</section>
+
+<section>
+<h2>7 · Mixing with a ruler</h2>
+
+<p>A mixing engineer adjusts by ear. We had to derive each setting from the original recording instead.</p>
+
+<p><b>Level.</b> Otto should be as loud as the humming he replaces. "As loud" is measured in LUFS, the loudness unit broadcasters use: it weights frequencies roughly the way ears do. We measured only over the notes, and left out the narration, which is louder than the humming and would have skewed it.</p>
+
+<p><b>Compression?</b> Engineers put a compressor on almost every vocal to even out the loud and quiet moments. We measured first:</p>
+
+<figure class="wide" id="fig-peaks">
+  <figcaption><b>How even is each voice?</b> The share of 10 ms moments at each level below the loudest moment.</figcaption>
+  <div class="legend" data-legend="peaks"></div>
+  <div class="chart" data-chart="peaks" style="height:230px"></div>
+  <p class="howto"><b>How to read it.</b> A voice whose curve sits further left spends more of its time close to its own peak, so it's more even. The dots mark each curve's median.</p>
+</figure>
+
+<p>The Otto choir is already <em>more</em> even than the humming it replaces: its median moment sits <span data-num="otto-med"></span> below its loudest, against <span data-num="hum-med"></span> for the humming. A compressor would only have flattened it further, so there isn't one.</p>
+
+<p><b>Reverb.</b> The original vocal sits in some space, and Otto's dry laughs should share it. To measure how much, we look at what happens right after a phrase ends: how fast does the sound die away? Most rests in the original are filled with breaths or narration, but three are clean:</p>
+
+<figure class="wide" id="fig-tails">
+  <figcaption><b>What happens after the last note of a phrase?</b> Level in the 0.6 s after a phrase ends, relative to the end of its last note.</figcaption>
+  <div class="legend" data-legend="tails"></div>
+  <div class="chart" data-chart="tails" style="height:240px"></div>
+  <p class="howto"><b>How to read it.</b> Zero on the time axis is where the note ends. Thin lines are the three individual phrase ends, thick lines their average. A long, slow slope would mean a big hall; a quick drop means a small space, or none. After about 0.35 s, the original's lines climb again: that's the next breath or phrase coming in, not reverb.</p>
+</figure>
+
+<p>The original's tails drop by 25–30 dB within about 0.3 s, which means a small space. So Otto gets a light, short room reverb, mixed in at about −16 dB. Not a hall.</p>
+
+<p><b>The limiter that wasn't.</b> A limiter is the last safety net: it stops the peaks from going over a ceiling. We used a popular audio library's limiter, and the measured loudness of our excerpt jumped by 2.6 dB, although nothing in it came near the ceiling. Two things were going on. The original soundtrack itself peaks above the ceiling after 2:10, which switched the limiter on. And that limiter wraps JUCE's, which also compresses everything above −10 dBFS at 4:1 and adds make-up gain. It was quietly re-mixing the whole song. We replaced it with a few lines of look-ahead limiting that act only inside the excerpt, and only where a peak would cross the ceiling. In our mix, none does.</p>
+
+<div class="tiles" data-tiles="final"></div>
+
+<p>The final mix is within half a dB of the original PV's loudness over the same 58 seconds, and its peaks stay 2.6 dB below full scale. One last check: the Otto track and the 伴奏 add up to the final mix to within −126 dB. So anyone can lay the vocals alone over the accompaniment and get exactly the same result.</p>
+</section>
+
+<section>
+<h2>What we learned</h2>
+
+<ul class="learned">
+  <li><b>Measure the thing you'd listen for, and check that the measure agrees with ears.</b> Four plausible "how many voices" measures; only one tracked what a person hears.</li>
+  <li><b>Get real stems; don't separate.</b> One mixture-consistency check, a single subtraction, told us more than any amount of clever spectral processing, and the spectral processing ate the narrator's words.</li>
+  <li><b>Verify your tools as well as your data.</b> A "limiter" turned out to be a compressor. A pitch centre measured on the wrong frames detuned a note by more than half an octave. Both were caught by re-measuring the output instead of trusting the code.</li>
+  <li><b>Put the human where judgement lives.</b> Notes in a gliding melody, the choice between α = 0.5 and α = 1, whether a cut lands cleanly: a person settles these in seconds, and a metric never fully does.</li>
+  <li><b>Keep every step as a file.</b> Every intermediate result is an ordinary WAV or MIDI file on one shared timeline, so the human could open any of them in a DAW, correct it, and hand it back.</li>
+</ul>
+
+<p class="tools"><b>Tools:</b> Python 3.11 with numpy and scipy (cross-correlation, filtering), librosa (pYIN pitch tracking), pyworld (the WORLD vocoder and Harvest), Praat via parselmouth (harmonics-to-noise), pedalboard (filter and reverb), pyloudnorm (LUFS), ffmpeg and yt-dlp. The charts are plain SVG and JavaScript, drawn from <code>data.js</code>, which <code>build.py blog</code> generates from the project's analysis.</p>
+</section>
+
+<footer>
+  <p>「日冕」 PV and its music © HoYoverse. The laughs are 电棍 (Otto)'s, from his streams. The lossless stems were shared by the uploader of Bilibili BV1QYgfzcEpF. The audio clips on this page are short excerpts of these recordings, included for illustration.</p>
+</footer>
+</article>
+
+<div class="tip" id="tip" hidden></div>
+<script src="data.js"></script>
+<script src="charts.js"></script>
+</body>
+</html>
